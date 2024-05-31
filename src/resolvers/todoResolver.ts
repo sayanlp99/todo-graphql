@@ -1,10 +1,18 @@
 import { Todo } from '../models/Todo';
+import redisClient from '../config/redis';
 
 const todoResolver = {
     Query: {
         myTodos: async (_: any, __: any, { user }: any) => {
             if (!user) throw new Error('Not authenticated');
-            return await Todo.findAll({ where: { userId: user.userId } });
+                const cacheKey = `todos:${user.userId}`;
+                const cachedTodos = await redisClient.get(cacheKey);
+                if (cachedTodos) {
+                return JSON.parse(cachedTodos);
+            }
+            const todos = await Todo.findAll({ where: { userId: user.userId } });
+            await redisClient.set(cacheKey, JSON.stringify(todos), 'EX', 600);
+            return todos;
         },
     },
   Mutation: {
